@@ -9,3 +9,6 @@ fi
 . "${git_mirrors_dir}/config.sh"
 . "${git_mirrors_dir}/lib/VERSION"
 . "${git_mirrors_dir}/lib/functions.sh"
+
+# Accept new SSH host keys without prompting (e.g. first connection to GitLab)
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o StrictHostKeyChecking=accept-new"
