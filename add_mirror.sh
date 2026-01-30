@@ -416,6 +416,9 @@ else
     echo "Local only mirror." 1>&2
   fi
 fi
+if ! ${no_remote_set} && ! ${http_remote}; then
+  ensure_gitlab_ssh_key || exit 1
+fi
 if ${git};then
   #create a mirror
   green_echo "Creating mirror from ${mirror}" 1>&2

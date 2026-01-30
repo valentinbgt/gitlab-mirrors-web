@@ -130,3 +130,55 @@ function underline_echo() {
   fi
   return 0
 }
+
+# Ensure the current user's SSH key is registered on GitLab so SSH (git push/fetch)
+# works without prompt. If SSH test fails, upload the public key via API and retry.
+# No-op when http_remote is true. Requires gitlab_url and gitlab_user_token_secret.
+ensure_gitlab_ssh_key() {
+  [ "${http_remote:-false}" = "true" ] && return 0
+
+  local host url_without_proto
+  url_without_proto="${gitlab_url#*://}"
+  host="${url_without_proto%%/*}"
+  [ -z "${host}" ] && return 1
+
+  _ensure_gitlab_ssh_key_test() {
+    ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "git@${host}" 2>/dev/null
+  }
+
+  if _ensure_gitlab_ssh_key_test; then
+    return 0
+  fi
+
+  local pubkey key_title
+  if [ -f "${HOME}/.ssh/id_ed25519.pub" ]; then
+    pubkey=$(cat "${HOME}/.ssh/id_ed25519.pub")
+  elif [ -f "${HOME}/.ssh/id_rsa.pub" ]; then
+    pubkey=$(cat "${HOME}/.ssh/id_rsa.pub")
+  else
+    red_echo "No SSH public key found (~/.ssh/id_ed25519.pub or id_rsa.pub). Cannot register key on GitLab." 1>&2
+    return 1
+  fi
+
+  key_title="gitlab-mirrors-$(hostname)-$(date +%Y%m%d)"
+  local curl_opts=(--request POST --silent --show-error --fail -L
+    --header "PRIVATE-TOKEN: ${gitlab_user_token_secret}"
+    --url "${gitlab_url%/}/api/v4/user/keys"
+    --data "title=${key_title}"
+    --data "key=${pubkey}")
+
+  if [ "${ssl_verify:-true}" != "true" ]; then
+    curl_opts+=(--insecure)
+  fi
+
+  if ! curl "${curl_opts[@]}" 2>/dev/null; then
+    red_echo "Failed to register SSH key on GitLab via API." 1>&2
+    return 1
+  fi
+
+  if ! _ensure_gitlab_ssh_key_test; then
+    red_echo "SSH key was uploaded but SSH test to GitLab still fails." 1>&2
+    return 1
+  fi
+  return 0
+}

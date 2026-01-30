@@ -57,6 +57,9 @@ cd "${repo_dir}/${gitlab_namespace}/${project_name}"
 if git config --get gitlabmirrors.noremote &> /dev/null && [ "$(git config --get gitlabmirrors.noremote)" = "true" ];then
   no_remote_set=true
 fi
+if ! ${no_remote_set} && ! ${http_remote:-false}; then
+  ensure_gitlab_ssh_key || exit 1
+fi
 if git config --get svn-remote.svn.url &> /dev/null;then
   #this is an SVN mirror so update it accordingly
   if [ "$(git config --get core.bare)" = "true" ];then
